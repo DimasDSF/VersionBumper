@@ -203,6 +203,8 @@ class GUInterface:
                             pySGUI.Popup('Incorrect Code Revision Entered. Needs to be >= 0.')
                     else:
                         pySGUI.Popup("Incorrect Input Type.")
+                else:
+                    sys.exit()
             else:
                 event, values = self.updater_gui_wnd.Read(timeout=10 if self.forceupdatecoderev else None)
                 if self.forceupdatecoderev is True:
