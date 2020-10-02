@@ -1,9 +1,13 @@
 import json
 import sys
 import os
-import datetime
+import time
 import PySimpleGUI as pySGUI
 import subprocess
+
+from utils import *
+
+DOUBLE_CLICK_MAX_INTERVAL = 0.25
 
 class Config:
     def __init__(self, file):
@@ -42,29 +46,62 @@ class GUInterface:
     def __init__(self):
         self.config = Config('config.json')
         self.selectedproject = None
+        self.selectedprojecttimestamp = 0
         self.updater_window = None
-        self.layout = [[pySGUI.Text('Projects:', size=(25, 1)), pySGUI.Button('Exit'),pySGUI.Button('Reload Data', key='_RELOAD_DATA_', size=(10, 1))],
-                      [pySGUI.Listbox(values=list(map(lambda x: str(x), self.config.db['projects'].keys())), size=(45, 15), enable_events=True, key="ProjectList")],
-                      [pySGUI.Text(text=self.get_project_data_string(), size=(40, 4), key="_PROJECT_INFO_")],
-                      [pySGUI.Button("Add Project", key="_ADD_PROJECT_"), pySGUI.Button("Remove Project", key="_REMOVE_PROJECT_", disabled=True), pySGUI.Button("Run Project", key="_RUN_PROJECT_", disabled=True)],
-                      [pySGUI.Button("Edit Project Directory", key="_EDIT_PROJECT_FOLDER_", disabled=True), pySGUI.Button("Edit Project Name", key="_EDIT_PROJECT_NAME_", disabled=True)]
-                     ]
-        self.wnd = pySGUI.Window('Projects', layout=self.layout, size=(390, 460))
+        self.layout = [[pySGUI.Text('Projects:', size=(25, 1)), pySGUI.Button('Exit'), pySGUI.Button('Reload Data', key='_RELOAD_DATA_', size=(10, 1))],
+                       [pySGUI.Listbox(values=list(map(lambda x: str(x), self.config.db['projects'].keys())), bind_return_key=True, select_mode=pySGUI.LISTBOX_SELECT_MODE_SINGLE, size=(45, 15), enable_events=True, key="ProjectList")],
+                       [pySGUI.Text(text=self.get_project_data_string(), size=(40, 5), background_color="lightblue", key="_PROJECT_INFO_")],
+                       [pySGUI.Text(text=self.get_selected_project_last_edited(), size=(40, 1), key="_UP_TO_DATE_")],
+                       [pySGUI.Button("Add Project", key="_ADD_PROJECT_"), pySGUI.Button("Remove Project", key="_REMOVE_PROJECT_", disabled=True), pySGUI.Button("Run Project", key="_RUN_PROJECT_", disabled=True), pySGUI.Button("Explore", key="_EXPLORE_", disabled=True)],
+                       [pySGUI.Button("Edit Project Directory", key="_EDIT_PROJECT_FOLDER_", disabled=True), pySGUI.Button("Edit Project Name", key="_EDIT_PROJECT_NAME_", disabled=True)]
+                      ]
+        self.wnd = pySGUI.Window('Projects', layout=self.layout, size=(390, 490))
 
     def get_project_data_string(self):
-        return 'Selected Project:{0}\nPath:\n{1}'.format(self.selectedproject, str(self.get_selected_project_path()))
+        return 'Selected Project:{0}\nPath:\n{1}'.format(self.selectedproject, split_path_string_on(self.get_selected_project_path(), 40, '/'))
 
     def get_project_db_data(self, project):
         return self.config.db['projects'][project] if project in self.config.db['projects'].keys() else None
 
-    def get_selected_project_path(self):
+    def get_selected_project_path(self, *, return_incorrect = False):
         if self.get_project_db_data(self.selectedproject) is not None:
-            return self.get_project_db_data(self.selectedproject).get('path', None)
+            _path = self.get_project_db_data(self.selectedproject).get('path', None)
+            return _path if os.path.exists(_path) or return_incorrect else None
         return None
+
+    def get_project_last_build_timestamp(self, project):
+        try:
+            with open(os.path.join(self.config.db['projects'][project]['path'], 'version.json'), 'r') as vd:
+                ver = json.load(vd)
+                return ver['buildstamp']
+        except:
+            return 0
+
+    def get_project_last_edited(self, project):
+        if self.get_project_db_data(project) is not None:
+            return f"Changes Built: {get_no_file_changes_after_build_text(self.get_project_last_build_timestamp(project), self.config.db['projects'][project]['path'])}"
+        else:
+            return "Changes Built: ?"
+
+    def get_selected_project_last_edited(self):
+        return self.get_project_last_edited(self.selectedproject)
 
     def reload_project_list(self):
         self.wnd.Refresh()
         self.wnd.Element("ProjectList").Update(values=list(map(lambda x: str(x), self.config.db['projects'].keys())))
+
+    def run_project(self):
+        if self.get_selected_project_path() is not None:
+            self.updater_window = subprocess.Popen(
+                ['pythonw', 'VersionFileManager.py', str(self.get_project_db_data(self.selectedproject)['path']),
+                 self.selectedproject], shell=False, stdin=None,
+                stdout=None, stderr=None)
+            if self.updater_window is not None:
+                self.updater_window.poll()
+                if self.updater_window.returncode is None:
+                    sys.exit()
+        else:
+            pySGUI.Popup("Selected Project does not have a correct path setup and cannot be launched.", title="Error", button_type=pySGUI.POPUP_BUTTONS_ERROR)
 
     def run(self):
         while True:
@@ -73,19 +110,20 @@ class GUInterface:
                 sys.exit()
             elif event == "_ADD_PROJECT_":
                 _GetFolder = pySGUI.PopupGetFolder("Select a Project Folder")
-                if os.path.exists(_GetFolder):
-                    _GetNewName = pySGUI.PopupGetText('Enter New Project Name')
-                    if _GetNewName is not None:
-                        if _GetNewName not in self.config.db['projects']:
-                            self.config.db['projects'][_GetNewName] = {
-                                "path": _GetFolder
-                            }
-                            self.selectedproject = _GetNewName
-                            self.config.save()
-                        else:
-                            pySGUI.Popup("This Project name already exists.")
-                else:
-                    pySGUI.Popup("Incorrect Directory Selected.")
+                if _GetFolder is not None:
+                    if os.path.exists(_GetFolder):
+                        _GetNewName = pySGUI.PopupGetText('Enter New Project Name')
+                        if _GetNewName is not None:
+                            if _GetNewName not in self.config.db['projects']:
+                                self.config.db['projects'][_GetNewName] = {
+                                    "path": _GetFolder
+                                }
+                                self.selectedproject = _GetNewName
+                                self.config.save()
+                            else:
+                                pySGUI.Popup("This Project name already exists.")
+                    else:
+                        pySGUI.Popup("Incorrect Directory Selected.")
                 self.reload_project_list()
             elif event == "_REMOVE_PROJECT_":
                 self.config.db['projects'].pop(self.selectedproject, None)
@@ -94,16 +132,19 @@ class GUInterface:
                 self.config.save()
             elif event == "ProjectList":
                 if len(values["ProjectList"]) > 0:
+                    if self.selectedproject is not None:
+                        if self.selectedproject == values['ProjectList'][0] and abs(time.time() - self.selectedprojecttimestamp) <= DOUBLE_CLICK_MAX_INTERVAL:
+                            self.run_project()
                     self.selectedproject = values["ProjectList"][0]
+                    self.selectedprojecttimestamp = time.time()
             elif event == "_RUN_PROJECT_":
-                self.updater_window = subprocess.Popen(['pythonw', 'VersionFileManager.py', str(self.get_project_db_data(self.selectedproject)['path']), self.selectedproject], shell=False, stdin=None,
-                                                       stdout=None, stderr=None)
-                if self.updater_window is not None:
-                    self.updater_window.poll()
-                    if self.updater_window.returncode is None:
-                        sys.exit()
+                self.run_project()
+            elif event == "_EXPLORE_":
+                if self.selectedproject is not None:
+                    if os.path.exists(self.get_selected_project_path()):
+                        os.system(f'start {self.get_selected_project_path()}')
             elif event == "_EDIT_PROJECT_FOLDER_":
-                _GetFolder = pySGUI.PopupGetFolder("Select New Project Folder", default_path=self.get_selected_project_path())
+                _GetFolder = pySGUI.PopupGetFolder("Select New Project Folder", default_path=self.get_selected_project_path(return_incorrect = True))
                 if _GetFolder is not None:
                     if os.path.exists(_GetFolder):
                         self.config.db['projects'][self.selectedproject]['path'] = _GetFolder
@@ -125,7 +166,9 @@ class GUInterface:
             elif event == "_RELOAD_DATA_":
                 self.reload_project_list()
             self.wnd.Element("_PROJECT_INFO_").Update(value=self.get_project_data_string())
+            self.wnd.Element("_UP_TO_DATE_").Update(value=self.get_selected_project_last_edited())
             self.wnd.Element("_EDIT_PROJECT_FOLDER_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
+            self.wnd.Element("_EXPLORE_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
             self.wnd.Element("_EDIT_PROJECT_NAME_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
             self.wnd.Element("_REMOVE_PROJECT_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
             self.wnd.Element("_RUN_PROJECT_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))

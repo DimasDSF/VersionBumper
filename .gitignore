@@ -1,3 +1,4 @@
 VerBumper/.idea/*
 VerBumper/ProdLogs/*
+*__pycache__*
 config.json

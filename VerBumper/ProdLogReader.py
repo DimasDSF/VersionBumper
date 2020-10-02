@@ -73,6 +73,6 @@ class GUInterface:
 if __name__ == '__main__':
     if len(sys.argv) == 2:
         gui = GUInterface(sys.argv[1])
+        gui.run()
     else:
         pySGUI.Popup('Incorrect number of arguments passed. {0}/1 required - ProjectProdLogPath'.format(len(sys.argv)-1))
-    gui.run()

@@ -6,8 +6,7 @@ import datetime
 import PySimpleGUI as pySGUI
 import subprocess
 
-mtz = datetime.timezone(datetime.timedelta(hours=3))
-notzformat = '{:%d-%m-%Y %H:%M:%S}'
+from utils import *
 
 class VerFile(object):
     def __init__(self, file):
@@ -133,7 +132,6 @@ def parse_version_info_to_string(data, with_av=True, text=True):
     av = ('-' + data.get('AV', '')) if len(data.get('AV', '')) > 0 else ''
     return f"{'Current Version: ' if text else ''}{data.get('PV', '')}.{data.get('MJV', '')}.{data.get('MNV', '')}{av if with_av else ''}"
 
-
 def parse_code_rev_string(data):
     return f"Code Revision: {data}"
 
@@ -158,12 +156,17 @@ class GUInterface:
         self.prod_log_folder = os.path.join('ProdLogs', name)
         self.forceupdatecoderev = False
         self.vf = VerFile(os.path.join(path, 'version.json'))
+        self.project_path = path
+        self.build_uptodate = get_no_file_changes_after_build(self.vf.data['buildstamp'], self.project_path)
         self.main_gui_layout = [[pySGUI.Text(parse_version_info_to_string(self.vf.verdata), key="_VERSION_TEXT_", size=(25, 1)),
                                 pySGUI.Button("Exit", key="_EXIT_BUTTON_"), pySGUI.Button("Cancel", key="_CANCEL_CHANGES_", disabled=True)],
                                 [pySGUI.Text(parse_code_rev_string(self.vf.coderev), key="_CODEREV_TEXT_", size=(22, 1)),
                                 pySGUI.Button("Save Version Data", key="_SAVE_VER_DATA_", disabled=(not self.changes_made))],
-                                [pySGUI.Text(parse_build_time(self.vf.data['buildtime']), key="_BUILDTIME_TEXT_", size=(22, 1)),
+                                [pySGUI.Text(parse_build_time(self.vf.data['buildtime']), key="_BUILDTIME_TEXT_", size=(24, 1)),
                                 pySGUI.Button("ProdLog Reader", key="_PROD_LOG_READER_")],
+                                [pySGUI.Button("Last File Change:", key="_UPDATE_FILE_CHANGES_"), pySGUI.Button("Unbuilt Changes", size=(15, 1), key="_UNBUILT_C_", disabled=self.build_uptodate), pySGUI.Button('Explore', key="_EXPLORE_")],
+                                [pySGUI.Text(get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path),
+                                                size=(18, 1), key="_FILE_CHANGE_")],
                                 [pySGUI.Text("Prod Tracker Start Time: "),
                                 pySGUI.Text("N/A", size=(15, 1), key="_PRODLOGGER_START_TIME_TEXT_")],
                                 [pySGUI.Button("Major Update", key="_UPD_PROJ_"),
@@ -237,8 +240,20 @@ class GUInterface:
                         adver = self.updater_gui_wnd.Element('_UPD_ADD_VER_').Get()
                         self.vf.verdata['AV'] = adver
                         self.vf.save()
+                        self.updater_gui_wnd.Element("_FILE_CHANGE_").Update(
+                            value=get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path))
+                        self.build_uptodate = get_no_file_changes_after_build(self.vf.data['buildstamp'], self.project_path)
                         self.changes_made = False
                         self.add_ver_changed = False
+                    elif event == '_UPDATE_FILE_CHANGES_':
+                        self.build_uptodate = get_no_file_changes_after_build(self.vf.data['buildstamp'], self.project_path)
+                        self.updater_gui_wnd.Element("_FILE_CHANGE_").Update(
+                            value=get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path, self.build_uptodate))
+                    elif event == '_EXPLORE_':
+                        if os.path.exists(self.project_path):
+                            os.system(f'start {self.project_path}')
+                    elif event == '_UNBUILT_C_':
+                        pySGUI.Popup(get_unbuilt_changed_files_text(get_unbuilt_changed_files(self.vf.data['buildstamp'], self.project_path)), title='Unbuilt Changes')
                     elif event == '_CANCEL_CHANGES_':
                         self.vf.load(True)
                         self.updater_gui_wnd.Element('_UPD_ADD_VER_').Update(value=self.vf.verdata['AV'])
@@ -307,6 +322,7 @@ class GUInterface:
                     self.updater_gui_wnd.Element("_VERSION_TEXT_").Update(value=parse_version_info_to_string(self.vf.verdata))
                     self.updater_gui_wnd.Element("_CODEREV_TEXT_").Update(value=parse_code_rev_string(self.vf.coderev))
                     self.updater_gui_wnd.Element("_BUILDTIME_TEXT_").Update(value=parse_build_time(self.vf.data['buildtime']))
+                    self.updater_gui_wnd.Element("_UNBUILT_C_").Update(disabled=self.build_uptodate)
                     self.updater_gui_wnd.Element("_CANCEL_CHANGES_").Update(disabled=(not self.changes_made and not self.add_ver_changed))
                     self.updater_gui_wnd.Element("_EXIT_BUTTON_").Update(
                         disabled=(self.cses is not None or self.changes_made or self.add_ver_changed))
