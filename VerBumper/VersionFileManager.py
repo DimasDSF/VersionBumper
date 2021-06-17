@@ -164,7 +164,7 @@ class GUInterface:
                                 pySGUI.Button("Save Version Data", key="_SAVE_VER_DATA_", disabled=(not self.changes_made))],
                                 [pySGUI.Text(parse_build_time(self.vf.data['buildtime']), key="_BUILDTIME_TEXT_", size=(24, 1)),
                                 pySGUI.Button("ProdLog Reader", key="_PROD_LOG_READER_")],
-                                [pySGUI.Button("Last File Change:", key="_UPDATE_FILE_CHANGES_"), pySGUI.Button("Unbuilt Changes", size=(15, 1), key="_UNBUILT_C_", disabled=self.build_uptodate), pySGUI.Button('Explore', key="_EXPLORE_")],
+                                [pySGUI.Button("Last File Change:", key="_UPDATE_FILE_CHANGES_"), pySGUI.Button("Up to Date" if self.build_uptodate else "Unbuilt Changes", size=(15, 1), key="_UNBUILT_C_", disabled=self.build_uptodate), pySGUI.Button('Explore', key="_EXPLORE_")],
                                 [pySGUI.Text(get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path),
                                                 size=(18, 1), key="_FILE_CHANGE_")],
                                 [pySGUI.Text("Prod Tracker Start Time: "),
@@ -322,11 +322,12 @@ class GUInterface:
                     self.updater_gui_wnd.Element("_VERSION_TEXT_").Update(value=parse_version_info_to_string(self.vf.verdata))
                     self.updater_gui_wnd.Element("_CODEREV_TEXT_").Update(value=parse_code_rev_string(self.vf.coderev))
                     self.updater_gui_wnd.Element("_BUILDTIME_TEXT_").Update(value=parse_build_time(self.vf.data['buildtime']))
-                    self.updater_gui_wnd.Element("_UNBUILT_C_").Update(disabled=self.build_uptodate)
+                    self.updater_gui_wnd.Element("_UNBUILT_C_").Update(disabled=self.build_uptodate, text="Up to Date" if self.build_uptodate else "Unbuilt Changes")
                     self.updater_gui_wnd.Element("_CANCEL_CHANGES_").Update(disabled=(not self.changes_made and not self.add_ver_changed))
                     self.updater_gui_wnd.Element("_EXIT_BUTTON_").Update(
                         disabled=(self.cses is not None or self.changes_made or self.add_ver_changed))
                     self.updater_gui_wnd.Element("_SAVE_VER_DATA_").Update(disabled=(not self.changes_made and not self.add_ver_changed))
+
 
 if __name__ == '__main__':
     if len(sys.argv) == 3:

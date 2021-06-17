@@ -48,12 +48,13 @@ class GUInterface:
         self.selectedproject = None
         self.selectedprojecttimestamp = 0
         self.updater_window = None
-        self.layout = [[pySGUI.Text('Projects:', size=(25, 1)), pySGUI.Button('Exit'), pySGUI.Button('Reload Data', key='_RELOAD_DATA_', size=(10, 1))],
-                       [pySGUI.Listbox(values=list(map(lambda x: str(x), self.config.db['projects'].keys())), bind_return_key=True, select_mode=pySGUI.LISTBOX_SELECT_MODE_SINGLE, size=(45, 15), enable_events=True, key="ProjectList")],
-                       [pySGUI.Text(text=self.get_project_data_string(), size=(40, 5), background_color="lightblue", key="_PROJECT_INFO_")],
-                       [pySGUI.Text(text=self.get_selected_project_last_edited(), size=(40, 1), key="_UP_TO_DATE_")],
-                       [pySGUI.Button("Add Project", key="_ADD_PROJECT_"), pySGUI.Button("Remove Project", key="_REMOVE_PROJECT_", disabled=True), pySGUI.Button("Run Project", key="_RUN_PROJECT_", disabled=True), pySGUI.Button("Explore", key="_EXPLORE_", disabled=True)],
-                       [pySGUI.Button("Edit Project Directory", key="_EDIT_PROJECT_FOLDER_", disabled=True), pySGUI.Button("Edit Project Name", key="_EDIT_PROJECT_NAME_", disabled=True)]
+        self.layout = [
+            [pySGUI.Text('Projects:', size=(25, 1)), pySGUI.Button('Exit'), pySGUI.Button('Reload Data', key='_RELOAD_DATA_', size=(10, 1))],
+            [pySGUI.Listbox(values=list(map(lambda x: str(x), self.config.db['projects'].keys())), bind_return_key=True, select_mode=pySGUI.LISTBOX_SELECT_MODE_SINGLE, size=(45, 15), enable_events=True, key="ProjectList")],
+            [pySGUI.Text(text=self.get_project_data_string(), size=(40, 5), background_color="lightblue", key="_PROJECT_INFO_")],
+            [pySGUI.Text(text=self.get_selected_project_last_edited(), size=(40, 1), key="_UP_TO_DATE_")],
+            [pySGUI.Button("Add Project", key="_ADD_PROJECT_"), pySGUI.Button("Remove Project", key="_REMOVE_PROJECT_", disabled=True), pySGUI.Button("Run Project", key="_RUN_PROJECT_", disabled=True), pySGUI.Button("Explore", key="_EXPLORE_", disabled=True)],
+            [pySGUI.Button("Edit Project Directory", key="_EDIT_PROJECT_FOLDER_", disabled=True), pySGUI.Button("Edit Project Name", key="_EDIT_PROJECT_NAME_", disabled=True)]
                       ]
         self.wnd = pySGUI.Window('Projects', layout=self.layout, size=(390, 490))
 
@@ -63,7 +64,7 @@ class GUInterface:
     def get_project_db_data(self, project):
         return self.config.db['projects'][project] if project in self.config.db['projects'].keys() else None
 
-    def get_selected_project_path(self, *, return_incorrect = False):
+    def get_selected_project_path(self, *, return_incorrect: bool = False):
         if self.get_project_db_data(self.selectedproject) is not None:
             _path = self.get_project_db_data(self.selectedproject).get('path', None)
             return _path if os.path.exists(_path) or return_incorrect else None
@@ -144,7 +145,7 @@ class GUInterface:
                     if os.path.exists(self.get_selected_project_path()):
                         os.system(f'start {self.get_selected_project_path()}')
             elif event == "_EDIT_PROJECT_FOLDER_":
-                _GetFolder = pySGUI.PopupGetFolder("Select New Project Folder", default_path=self.get_selected_project_path(return_incorrect = True))
+                _GetFolder = pySGUI.PopupGetFolder("Select New Project Folder", default_path=self.get_selected_project_path(return_incorrect=True))
                 if _GetFolder is not None:
                     if os.path.exists(_GetFolder):
                         self.config.db['projects'][self.selectedproject]['path'] = _GetFolder
@@ -172,6 +173,7 @@ class GUInterface:
             self.wnd.Element("_EDIT_PROJECT_NAME_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
             self.wnd.Element("_REMOVE_PROJECT_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
             self.wnd.Element("_RUN_PROJECT_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
+
 
 if __name__ == "__main__":
     GUI = GUInterface()

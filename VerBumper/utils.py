@@ -12,6 +12,7 @@ notzformat = '{:%d-%m-%Y %H:%M:%S}'
 def recursive_fileiter(sdir):
     ret = list()
     if os.path.exists(sdir):
+        f: os.DirEntry
         folders = [f.path for f in os.scandir(sdir) if (f.is_dir() and not f.name.startswith("."))]
         for folder in folders:
             ret.extend(recursive_fileiter(folder))
@@ -20,6 +21,7 @@ def recursive_fileiter(sdir):
                 ret.append(sdir)
         with os.scandir(sdir) as directory:
             for item in directory:
+                item: os.DirEntry
                 if item.is_file() and item.name != "version.json":
                     ret.append(item)
     return ret
