@@ -1,18 +1,9 @@
-import time
 import json
 import os
 import sys
 import PySimpleGUI as pySGUI
 
-def format_seconds_to_str(sec=0):
-    l_time = time.gmtime(sec)
-    years = int(l_time.tm_year) - 1970
-    days = str((int(l_time.tm_yday) - 1) + years * 366) + 'd ' if ((int(l_time.tm_yday) - 1) + years * 366) != 0 else ""
-    hours = str(l_time.tm_hour) + 'h:' if int(l_time.tm_hour) != 0 else ""
-    minutes = str(l_time.tm_min) + 'm:' if int(l_time.tm_min) != 0 else ""
-    seconds = time.strftime("%S", l_time)
-    return '{0}{1}{2}{3}s'.format(days, hours, minutes, seconds)
-
+from utils import *
 
 def fill_text_with_data(data):
     prod = data.get('productivity', 'Unknown')
@@ -69,6 +60,7 @@ class GUInterface:
                 self.wnd.Refresh()
                 self.wnd.Element("LB").Update(values=list(map(lambda x: str(x), self.pld.keys())))
                 self.wnd.Element("SesList").Update(values=[])
+
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:

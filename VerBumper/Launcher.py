@@ -1,4 +1,5 @@
 import json
+import pathlib
 import sys
 import os
 import time
@@ -21,11 +22,11 @@ class Config:
             with open(self.file) as data:
                 self.db = json.load(data)
         except FileNotFoundError:
-            print('No previous projects data found.')
+            debug_print('No previous projects data found.')
         except json.decoder.JSONDecodeError:
-            print('Failure to read malformed previous projects data file.')
+            debug_print('Failure to read malformed previous projects data file.')
         except Exception as e:
-            print('Failure to read projects data.\n{0}: {1}.'.format(type(e).__name__, e.args[0]))
+            debug_print('Failure to read projects data.\n{0}: {1}.'.format(type(e).__name__, e.args[0]))
         else:
             self.ready = True
         finally:
@@ -40,7 +41,7 @@ class Config:
             with open(self.file, "w") as data:
                 json.dump(self.db, data, indent=4)
         except Exception as e:
-            print('Failure to write projects.\n{0}: {1}'.format(type(e).__name__, e.args[0]))
+            debug_print('Failure to write projects.\n{0}: {1}'.format(type(e).__name__, e.args[0]))
 
 class GUInterface:
     def __init__(self):
@@ -50,13 +51,14 @@ class GUInterface:
         self.updater_window = None
         self.layout = [
             [pySGUI.Text('Projects:', size=(25, 1)), pySGUI.Button('Exit'), pySGUI.Button('Reload Data', key='_RELOAD_DATA_', size=(10, 1))],
-            [pySGUI.Listbox(values=list(map(lambda x: str(x), self.config.db['projects'].keys())), bind_return_key=True, select_mode=pySGUI.LISTBOX_SELECT_MODE_SINGLE, size=(45, 15), enable_events=True, key="ProjectList")],
-            [pySGUI.Text(text=self.get_project_data_string(), size=(40, 5), background_color="lightblue", key="_PROJECT_INFO_")],
+            [pySGUI.Listbox(values=list(map(lambda x: str(x), self.config.db['projects'].keys())), bind_return_key=True, select_mode=pySGUI.LISTBOX_SELECT_MODE_SINGLE, size=(47, 15), enable_events=True, key="ProjectList")],
+            [pySGUI.Text(text=self.get_project_data_string(), size=(43, 5), text_color='black', background_color="lightblue", key="_PROJECT_INFO_")],
             [pySGUI.Text(text=self.get_selected_project_last_edited(), size=(40, 1), key="_UP_TO_DATE_")],
             [pySGUI.Button("Add Project", key="_ADD_PROJECT_"), pySGUI.Button("Remove Project", key="_REMOVE_PROJECT_", disabled=True), pySGUI.Button("Run Project", key="_RUN_PROJECT_", disabled=True), pySGUI.Button("Explore", key="_EXPLORE_", disabled=True)],
-            [pySGUI.Button("Edit Project Directory", key="_EDIT_PROJECT_FOLDER_", disabled=True), pySGUI.Button("Edit Project Name", key="_EDIT_PROJECT_NAME_", disabled=True)]
-                      ]
-        self.wnd = pySGUI.Window('Projects', layout=self.layout, size=(390, 490))
+            [pySGUI.Button("Edit Project Directory", key="_EDIT_PROJECT_FOLDER_", disabled=True), pySGUI.Button("Edit Project Name", key="_EDIT_PROJECT_NAME_", disabled=True)],
+            [pySGUI.Button("Edit Ignored Paths for Project", key="_EDIT_IGNORE_PATHS", disabled=True)]
+            ]
+        self.wnd = pySGUI.Window('Projects', layout=self.layout, size=(390, 520))
 
     def get_project_data_string(self):
         return 'Selected Project:{0}\nPath:\n{1}'.format(self.selectedproject, split_path_string_on(self.get_selected_project_path(), 40, '/'))
@@ -70,6 +72,12 @@ class GUInterface:
             return _path if os.path.exists(_path) or return_incorrect else None
         return None
 
+    def get_selected_project_ignore_paths(self, as_object: bool = False):
+        if self.get_project_db_data(self.selectedproject) is not None:
+            _obj = IgnoredPathsStorage(str(pathlib.Path(f'./ProjectData/{self.selectedproject}/ignored_paths.json').absolute()).replace('\\', '/'))
+            return _obj if as_object else _obj.paths
+        return None if as_object else set()
+
     def get_project_last_build_timestamp(self, project):
         try:
             with open(os.path.join(self.config.db['projects'][project]['path'], 'version.json'), 'r') as vd:
@@ -80,7 +88,7 @@ class GUInterface:
 
     def get_project_last_edited(self, project):
         if self.get_project_db_data(project) is not None:
-            return f"Changes Built: {get_no_file_changes_after_build_text(self.get_project_last_build_timestamp(project), self.config.db['projects'][project]['path'])}"
+            return f"Changes Built: {get_no_file_changes_after_build_text(self.get_project_last_build_timestamp(project), self.config.db['projects'][project]['path'], ignored=self.get_selected_project_ignore_paths())}"
         else:
             return "Changes Built: ?"
 
@@ -94,9 +102,8 @@ class GUInterface:
     def run_project(self):
         if self.get_selected_project_path() is not None:
             self.updater_window = subprocess.Popen(
-                ['pythonw', 'VersionFileManager.py', str(self.get_project_db_data(self.selectedproject)['path']),
-                 self.selectedproject], shell=False, stdin=None,
-                stdout=None, stderr=None)
+                ['pythonw' if not isDebug else 'python', 'VersionFileManager.py', str(self.get_project_db_data(self.selectedproject)['path']),
+                 self.selectedproject], shell=False, stdin=None, stdout=None, stderr=None)
             if self.updater_window is not None:
                 self.updater_window.poll()
                 if self.updater_window.returncode is None:
@@ -164,6 +171,16 @@ class GUInterface:
                         self.reload_project_list()
                     else:
                         pySGUI.Popup("This Project name already exists.")
+            elif event == "_EDIT_IGNORE_PATHS":
+                if self.get_selected_project_path() is not None:
+                    _ignore_path_editor_window = subprocess.Popen(
+                        ['pythonw' if not isDebug else 'python', 'IgnoredPathManager.py', str(pathlib.Path(f'./ProjectData/{self.selectedproject}/ignored_paths.json').absolute()).replace('\\', '/'), str(self.get_project_db_data(self.selectedproject)['path']), self.selectedproject],
+                        shell=False, stdin=None, stdout=None, stderr=None)
+                    if _ignore_path_editor_window is not None:
+                        _ignore_path_editor_window.wait()
+                else:
+                    pySGUI.Popup("Selected Project does not have a correct path setup and cannot be launched.",
+                                 title="Error", button_type=pySGUI.POPUP_BUTTONS_ERROR)
             elif event == "_RELOAD_DATA_":
                 self.reload_project_list()
             self.wnd.Element("_PROJECT_INFO_").Update(value=self.get_project_data_string())
@@ -171,6 +188,7 @@ class GUInterface:
             self.wnd.Element("_EDIT_PROJECT_FOLDER_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
             self.wnd.Element("_EXPLORE_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
             self.wnd.Element("_EDIT_PROJECT_NAME_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
+            self.wnd.Element("_EDIT_IGNORE_PATHS").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
             self.wnd.Element("_REMOVE_PROJECT_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
             self.wnd.Element("_RUN_PROJECT_").Update(disabled=(self.get_project_db_data(self.selectedproject) is None))
 

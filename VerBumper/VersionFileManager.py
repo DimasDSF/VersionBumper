@@ -1,4 +1,6 @@
 import json
+import pathlib
+import shutil
 import sys
 import os
 import time
@@ -23,11 +25,11 @@ class VerFile(object):
                 with open(self.file, "r") as data:
                     self.data = json.load(data)
             except FileNotFoundError:
-                print('No previous versioning data found.')
+                debug_print('No previous versioning data found.')
             except json.decoder.JSONDecodeError:
-                print('Failure to read malformed previous versioning data file.')
+                debug_print('Failure to read malformed previous versioning data file.')
             except Exception as e:
-                print('Failure to read previous versioning data.\n{0}: {1}.'.format(type(e).__name__, e.args[0]))
+                debug_print('Failure to read previous versioning data.\n{0}: {1}.'.format(type(e).__name__, e.args[0]))
             else:
                 self.coderev = int(self.data['coderev'])
                 verstring = self.data.get('version', None)
@@ -67,7 +69,7 @@ class VerFile(object):
                 with open(self.file, "w") as data:
                     json.dump(self.data, data, indent=4)
             except Exception as e:
-                print('Failure to write versioning data.\n{0}: {1}'.format(type(e).__name__, e.args[0]))
+                debug_print('Failure to write versioning data.\n{0}: {1}'.format(type(e).__name__, e.args[0]))
 
 
 class CSession(object):
@@ -149,11 +151,15 @@ class GUInterface:
         self.add_ver_changed = False
         self.manual_version_entry_active = False
         self.prod_log_reader_inst = None
-        if not os.path.exists('ProdLogs/'):
-            os.mkdir('ProdLogs/')
-        if not os.path.exists(os.path.join('ProdLogs', name)):
-            os.mkdir(os.path.join('ProdLogs', name))
-        self.prod_log_folder = os.path.join('ProdLogs', name)
+        self.project_name = name
+        self.ignored_folders = IgnoredPathsStorage(str(pathlib.Path(f'./ProjectData/{name}/ignored_paths.json').absolute()).replace('\\', '/'))
+        self.prod_log_folder = str(pathlib.Path(f'./ProjectData/{name}/ProdLogs').absolute())
+        if not os.path.exists(self.prod_log_folder):
+            os.makedirs(self.prod_log_folder, exist_ok=True)
+        self.changelogs_folder = str(pathlib.Path(f'./ProjectData/{name}/ChangeLogs').absolute())
+        if not os.path.exists(self.changelogs_folder):
+            os.makedirs(self.changelogs_folder, exist_ok=True)
+        self.patches_folder = str(pathlib.Path(f'./ProjectData/{name}/Patches').absolute())
         self.forceupdatecoderev = False
         self.vf = VerFile(os.path.join(path, 'version.json'))
         self.project_path = path
@@ -165,8 +171,8 @@ class GUInterface:
                                 [pySGUI.Text(parse_build_time(self.vf.data['buildtime']), key="_BUILDTIME_TEXT_", size=(24, 1)),
                                 pySGUI.Button("ProdLog Reader", key="_PROD_LOG_READER_")],
                                 [pySGUI.Button("Last File Change:", key="_UPDATE_FILE_CHANGES_"), pySGUI.Button("Up to Date" if self.build_uptodate else "Unbuilt Changes", size=(15, 1), key="_UNBUILT_C_", disabled=self.build_uptodate), pySGUI.Button('Explore', key="_EXPLORE_")],
-                                [pySGUI.Text(get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path),
-                                                size=(18, 1), key="_FILE_CHANGE_")],
+                                [pySGUI.Text(get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path, ignored=self.ignored_folders.paths), size=(28, 1), key="_FILE_CHANGE_"),
+                                 pySGUI.Button("Build Patch", key="_BUILD_PATCH")],
                                 [pySGUI.Text("Prod Tracker Start Time: "),
                                 pySGUI.Text("N/A", size=(15, 1), key="_PRODLOGGER_START_TIME_TEXT_")],
                                 [pySGUI.Button("Major Update", key="_UPD_PROJ_"),
@@ -239,21 +245,31 @@ class GUInterface:
                             self.vf.coderev += 1
                         adver = self.updater_gui_wnd.Element('_UPD_ADD_VER_').Get()
                         self.vf.verdata['AV'] = adver
+                        # Changelogs
+                        _changed_files = get_unbuilt_changed_files(self.vf.data['buildstamp'], self.project_path, self.ignored_folders.paths)
+                        _cl = ChangeLog(self.project_name, self.vf.coderev)
+                        _cl.paths.update([x[0].path.replace('\\', '/') for x in _changed_files])
+                        _cl.save()
                         self.vf.save()
                         self.updater_gui_wnd.Element("_FILE_CHANGE_").Update(
-                            value=get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path))
-                        self.build_uptodate = get_no_file_changes_after_build(self.vf.data['buildstamp'], self.project_path)
+                            value=get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path, ignored=self.ignored_folders.paths))
+                        self.build_uptodate = get_no_file_changes_after_build(self.vf.data['buildstamp'], self.project_path, ignored=self.ignored_folders.paths)
                         self.changes_made = False
                         self.add_ver_changed = False
+                    elif event == '_BUILD_PATCH':
+                        _patch_builder_window = subprocess.Popen(
+                            ['pythonw' if not isDebug else 'python', 'PatchBuilder.py', self.project_name, self.project_path, str(self.vf.coderev)], shell=False, stdin=None, stdout=None, stderr=None)
+                        if _patch_builder_window is not None:
+                            _patch_builder_window.wait()
                     elif event == '_UPDATE_FILE_CHANGES_':
-                        self.build_uptodate = get_no_file_changes_after_build(self.vf.data['buildstamp'], self.project_path)
+                        self.build_uptodate = get_no_file_changes_after_build(self.vf.data['buildstamp'], self.project_path, ignored=self.ignored_folders.paths)
                         self.updater_gui_wnd.Element("_FILE_CHANGE_").Update(
-                            value=get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path, self.build_uptodate))
+                            value=get_no_file_changes_after_build_text(self.vf.data['buildstamp'], self.project_path, self.build_uptodate, ignored=self.ignored_folders.paths))
                     elif event == '_EXPLORE_':
                         if os.path.exists(self.project_path):
                             os.system(f'start {self.project_path}')
                     elif event == '_UNBUILT_C_':
-                        pySGUI.Popup(get_unbuilt_changed_files_text(get_unbuilt_changed_files(self.vf.data['buildstamp'], self.project_path)), title='Unbuilt Changes')
+                        pySGUI.Popup(get_unbuilt_changed_files_text(get_unbuilt_changed_files(self.vf.data['buildstamp'], self.project_path, ignored_paths=self.ignored_folders.paths)), title='Unbuilt Changes')
                     elif event == '_CANCEL_CHANGES_':
                         self.vf.load(True)
                         self.updater_gui_wnd.Element('_UPD_ADD_VER_').Update(value=self.vf.verdata['AV'])
@@ -308,7 +324,7 @@ class GUInterface:
                             if self.prod_log_reader_inst.returncode is not None:
                                 self.prod_log_reader_inst = None
                         if self.prod_log_reader_inst is None:
-                            self.prod_log_reader_inst = subprocess.Popen(['pythonw', 'ProdLogReader.py', str(self.prod_log_folder)], shell=False, stdin=None,
+                            self.prod_log_reader_inst = subprocess.Popen(['pythonw' if not isDebug else 'python', 'ProdLogReader.py', str(self.prod_log_folder)], shell=False, stdin=None,
                                                                          stdout=None, stderr=None)
                     elif event == '_EXIT_BUTTON_':
                         if self.prod_log_reader_inst is not None:
