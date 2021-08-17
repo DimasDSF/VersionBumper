@@ -8,6 +8,8 @@ import datetime
 import PySimpleGUI as pySGUI
 import subprocess
 
+from typing import Union, List
+
 from utils import *
 
 class VerFile(object):
@@ -326,10 +328,13 @@ class GUInterface:
                         if self.prod_log_reader_inst is None:
                             self.prod_log_reader_inst = subprocess.Popen(['pythonw' if not isDebug else 'python', 'ProdLogReader.py', str(self.prod_log_folder)], shell=False, stdin=None,
                                                                          stdout=None, stderr=None)
-                    elif event == '_EXIT_BUTTON_':
+                    elif event == '_EXIT_BUTTON_' or event == pySGUI.WINDOW_CLOSED:
                         if self.prod_log_reader_inst is not None:
                             if self.prod_log_reader_inst.poll() is None:
                                 self.prod_log_reader_inst.kill()
+                        de: os.DirEntry
+                        for patchdir in [de for de in os.scandir(self.patches_folder) if de.is_dir()]:
+                            shutil.rmtree(patchdir.path, True)
                         sys.exit()
                     self.updater_gui_wnd.Element("_MANUAL_VER_INPUT_").Update(value=parse_version_info_to_string(self.vf.verdata, False, False))
                     self.updater_gui_wnd.Element("_PRODLOGGER_START_BUTTON_").Update(text=get_prodlogger_button_text(self.cses is None))

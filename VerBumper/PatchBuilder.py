@@ -16,9 +16,10 @@ class GUInterface:
         self.selected_coderev = None
         self.changelog = None
         self.changes_paths = set()
+        self.patches = sorted([x.name for x in os.scandir(self.changelogs_path)], reverse=True) # noqa
         self.layout = [
             [pySGUI.Text('CodeRev Changelogs:', size=(28, 1)), pySGUI.Text('List of Changed Files: ')],
-            [pySGUI.Listbox(values=[x.name for x in os.scandir(self.changelogs_path)], size=(30, 20), enable_events=True, key="LB"), pySGUI.Listbox(values=[], size=(90, 20), key="_CHANGES")],  # noqa
+            [pySGUI.Listbox(values=self.patches, size=(30, 20), enable_events=True, key="LB"), pySGUI.Listbox(values=[], size=(90, 20), key="_CHANGES")],
             [pySGUI.Button("Build a patch", key="_BUILD_PATCH", disabled=True), pySGUI.Button('Exit')],
             ]
         self.wnd = pySGUI.Window(f'{name}: Ignored Paths Editor', layout=self.layout, size=(800, 440))

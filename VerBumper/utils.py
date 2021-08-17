@@ -4,7 +4,7 @@ import datetime
 import pathlib
 import time
 
-from typing import Optional, Set
+from typing import Optional, Set, List, Tuple
 
 __all__ = ['recursive_fileiter', 'format_seconds_to_str', 'get_latest_file_change_in_a_folder', 'get_no_file_changes_after_build',
            'get_no_file_changes_after_build_text', 'split_path_string_on', 'get_unbuilt_changed_files', 'get_unbuilt_changed_files_text',
@@ -127,11 +127,11 @@ def get_latest_file_change_in_a_folder(path, ignored_paths: Set[Optional[str]] =
             maxts = os.stat(f).st_mtime
     return maxts
 
-def get_unbuilt_changed_files(buildtime, path, ignored_paths: Set[Optional[str]] = ()):
+def get_unbuilt_changed_files(buildtime, path, ignored_paths: Set[Optional[str]] = ()) -> List[Tuple[os.DirEntry, datetime.datetime]]:
     _ucf = list()
     for f in recursive_fileiter(path, ignored_paths):
         if os.stat(f).st_mtime > buildtime:
-            _ucf.append([f, datetime.datetime.fromtimestamp(os.stat(f).st_mtime)])
+            _ucf.append((f, datetime.datetime.fromtimestamp(os.stat(f).st_mtime)))
     return _ucf
 
 def get_unbuilt_changed_files_text(filelist: list):
