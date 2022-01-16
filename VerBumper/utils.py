@@ -161,7 +161,7 @@ def get_changed_files_paths_from_changelogs(changelog: ChangeLog, current_code_r
             debug_print(f"CLog {crev_clog_num} does not exist. skipping")
             continue
         else:
-            debug_print(f"Openning {crev_clog_num}.clog")
+            debug_print(f"Opening {crev_clog_num}.clog")
             _changes = _clog.paths
             debug_print(f"    Adding {len(_changes)} from {crev_clog_num}.clog")
             if isDebug:

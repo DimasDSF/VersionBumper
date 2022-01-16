@@ -335,6 +335,9 @@ class GUInterface:
                         de: os.DirEntry
                         for patchdir in [de for de in os.scandir(self.patches_folder) if de.is_dir()]:
                             shutil.rmtree(patchdir.path, True)
+                        # Reopen the Launcher
+                        subprocess.Popen(['pythonw' if not isDebug else 'python', 'Launcher.py'], shell=False, stdin=None, stdout=None, stderr=None)
+                        # Then exit
                         sys.exit()
                     self.updater_gui_wnd.Element("_MANUAL_VER_INPUT_").Update(value=parse_version_info_to_string(self.vf.verdata, False, False))
                     self.updater_gui_wnd.Element("_PRODLOGGER_START_BUTTON_").Update(text=get_prodlogger_button_text(self.cses is None))
